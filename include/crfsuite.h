@@ -134,6 +134,20 @@ typedef struct {
     floatval_t  value;              /**< Value of the attribute. */
 } crfsuite_attribute_t;
 
+
+/* a list of integers, use to store the fuzzy labels
+ * For example, if 
+ */
+typedef struct {
+  /** Number of contents associated with the fuzzy labels */
+  int num_labels;
+  /** Maximum number of contents (internal use). */
+  int cap_labels;
+  /** Array of labels */
+  int * labels;
+} crfsuite_fuzzy_labels_t;
+
+
 /**
  * An item.
  *  An item consists of an array of attributes.
@@ -160,10 +174,11 @@ typedef struct {
     crfsuite_item_t  *items;
     /** Array of the label sequence. */
     int         *labels;
+    crfsuite_fuzzy_labels_t *fuzzy_labels;
     /** Instance weight. */
     floatval_t  weight;
     /** Group ID of the instance. */
-	int         group;
+    int         group;
 } crfsuite_instance_t;
 
 /**
@@ -804,6 +819,32 @@ void crfsuite_attribute_copy(crfsuite_attribute_t* dst, const crfsuite_attribute
  *  @param  y           The pointer to another attribute structure.
  */
 void crfsuite_attribute_swap(crfsuite_attribute_t* x, crfsuite_attribute_t* y);
+
+/**
+ * Initialize an fuzzy label structure.
+ *  @param  fuzzy       The pointer to an fuzzy label structure.
+ */
+void crfsuite_fuzzy_labels_init(crfsuite_fuzzy_labels_t * fuzzy);
+
+/**
+ * Uninitialize an fuzzy label structure.
+ *  @param  fuzzy       The pointer to the fuzzy label structure
+ */
+void crfsuite_fuzzy_labels_finish(crfsuite_fuzzy_labels_t * fuzzy);
+
+/**
+ *
+ *
+ */
+void crfsuite_fuzzy_labels_copy(crfsuite_fuzzy_labels_t* dst, const crfsuite_fuzzy_labels_t* src);
+
+/**
+ *
+ *
+ */
+void crfsuite_fuzzy_labels_swap(crfsuite_fuzzy_labels_t* x, crfsuite_fuzzy_labels_t* y);
+
+int crfsuite_fuzzy_labels_append(crfsuite_fuzzy_labels_t* fuzzy, int lid);
 
 /**
  * Initialize an item structure.

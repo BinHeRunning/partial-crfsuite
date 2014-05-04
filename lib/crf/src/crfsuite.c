@@ -90,6 +90,51 @@ void crfsuite_attribute_swap(crfsuite_attribute_t* x, crfsuite_attribute_t* y)
 }
 
 
+void crfsuite_fuzzy_labels_init(crfsuite_fuzzy_labels_t * fuzzy)
+{
+    memset(fuzzy, 0, sizeof(*fuzzy));
+}
+
+void crfsuite_fuzzy_labels_finish(crfsuite_fuzzy_labels_t* fuzzy)
+{
+    free(fuzzy->labels);
+    crfsuite_fuzzy_labels_init(fuzzy);
+}
+
+void crfsuite_fuzzy_labels_copy(crfsuite_fuzzy_labels_t* dst,
+                                const crfsuite_fuzzy_labels_t* src)
+{
+    int i;
+
+    dst->num_labels = src->num_labels;
+    dst->cap_labels = src->cap_labels;
+    dst->labels = (int *)calloc(dst->num_labels, sizeof(int));
+    for (i = 0; i < dst->num_labels; ++ i) {
+        dst->labels[i] = src->labels[i];
+    }
+}
+
+void crfsuite_fuzzy_labels_swap(crfsuite_fuzzy_labels_t * x,
+                                crfsuite_fuzzy_labels_t * y)
+{
+    crfsuite_fuzzy_labels_t tmp = (*x);
+    x->num_labels = y->num_labels;
+    x->cap_labels = y->cap_labels;
+    x->labels = y->labels;
+    y->num_labels = tmp.num_labels;
+    y->cap_labels = tmp.cap_labels;
+    y->labels = tmp.labels;
+}
+
+int crfsuite_fuzzy_labels_append(crfsuite_fuzzy_labels_t* fuzzy, int lid)
+{
+    if (fuzzy->cap_labels <= fuzzy->num_labels) {
+        fuzzy->cap_labels = (fuzzy->cap_labels + 1) * 2;
+        fuzzy->labels = (int *)realloc(fuzzy->labels, sizeof(int) * fuzzy->cap_labels);
+    }
+    fuzzy->labels[fuzzy->num_labels++] = lid;
+    return 0;
+}
 
 void crfsuite_item_init(crfsuite_item_t* item)
 {

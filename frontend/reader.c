@@ -56,13 +56,46 @@ static int progress(FILE *fpo, int prev, int current)
     return prev;
 }
 
+static int parse_fuzzy_labels(const char * token,
+                              crfsuite_fuzzy_labels_t *fuzzy,
+                              crfsuite_dictionary_t *labels)
+{
+    int len = strlen(token);
+    char * token_copy = (char *)calloc(len + 1, sizeof(char));
+    strcpy(token_copy, token);
+    const char * s = NULL;
+    char * e = NULL;
+    int lid = -1;
+
+    s = token_copy;
+    e = token_copy;
+
+    while (*s) {
+        if ((*e) == '|') {
+            (*e) = '\0';
+            lid = labels->get(labels, s);
+            crfsuite_fuzzy_labels_append(fuzzy, lid);
+            s = e + 1;
+        } else if ((*e) == '\0') {
+            lid = labels->get(labels, s);
+            crfsuite_fuzzy_labels_append(fuzzy, lid);
+            s = e;
+        }
+        ++ e;
+    }
+
+    return 0;
+}
+
 int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
 {
     int n = 0;
     int lid = -1;
+    int * lids = NULL;
     crfsuite_instance_t inst;
     crfsuite_item_t item;
     crfsuite_attribute_t cont;
+    crfsuite_fuzzy_labels_t fuzzy;
     iwa_t* iwa = NULL;
     crfsuite_dictionary_t *attrs = data->attrs;
     crfsuite_dictionary_t *labels = data->labels;
@@ -80,12 +113,16 @@ int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
     filesize = ftell(fpi) - begin;
     fseek(fpi, begin, SEEK_SET);
 
+    fprintf(stderr, "hi, i am in read data!\n");
+
     /* */
     fprintf(fpo, "0");
     fflush(fpo);
     prev = 0;
 
+    /* allocate a lid from the data*/
     iwa = iwa_reader(fpi);
+
     while (token = iwa_read(iwa), token != NULL) {
         /* Progress report. */
         offset = ftell(fpi);
@@ -120,6 +157,8 @@ int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
                     }
                 } else {
                     /* Label. */
+                    crfsuite_fuzzy_labels_init(&fuzzy);
+                    parse_fuzzy_labels(token->attr, &fuzzy, labels);
                     lid = labels->get(labels, token->attr);
                 }
             } else {
