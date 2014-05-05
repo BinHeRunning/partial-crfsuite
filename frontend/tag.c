@@ -301,7 +301,7 @@ static int tag(tagger_option_t* opt, crfsuite_model_t* model)
             break;
         case IWA_EOI:
             /* Append the item to the instance. */
-            crfsuite_instance_append(&inst, &item, lid);
+            crfsuite_instance_append(&inst, &item, NULL, lid);
             crfsuite_item_finish(&item);
             break;
         case IWA_ITEM:

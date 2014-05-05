@@ -172,9 +172,12 @@ typedef struct {
     int         cap_items;
     /** Array of the item sequence. */
     crfsuite_item_t  *items;
-    /** Array of the label sequence. */
+    /** Array of the label sequence. Since some function
+     *  of the whole toolkit still need the labels, (like
+     *  holdout, evaluation), the labels is reserved. */
     int         *labels;
-    crfsuite_fuzzy_labels_t *fuzzy_labels;
+    /** Array of the fuzzy labels */
+    crfsuite_fuzzy_labels_t *fuzzy;
     /** Instance weight. */
     floatval_t  weight;
     /** Group ID of the instance. */
@@ -844,6 +847,10 @@ void crfsuite_fuzzy_labels_copy(crfsuite_fuzzy_labels_t* dst, const crfsuite_fuz
  */
 void crfsuite_fuzzy_labels_swap(crfsuite_fuzzy_labels_t* x, crfsuite_fuzzy_labels_t* y);
 
+/**
+ *
+ *
+ */
 int crfsuite_fuzzy_labels_append(crfsuite_fuzzy_labels_t* fuzzy, int lid);
 
 /**
@@ -936,7 +943,10 @@ void crfsuite_instance_swap(crfsuite_instance_t* x, crfsuite_instance_t* y);
  *  @param  label       The label to be added to the instance.
  *  @return int         \c 0 if successful, \c -1 otherwise.
  */
-int  crfsuite_instance_append(crfsuite_instance_t* seq, const crfsuite_item_t* item, int label);
+int  crfsuite_instance_append(crfsuite_instance_t* seq,
+    const crfsuite_item_t* item,
+    const crfsuite_fuzzy_labels_t* labels,
+    int lid);
 
 /**
  * Check whether the instance has no item.

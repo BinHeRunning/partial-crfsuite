@@ -429,6 +429,7 @@ crf1de_set_data(
         }
     }
 
+    logging(lg, "T : %d\n", T);
     /* Construct a CRF context. */
     crf1de->ctx = crf1dc_new(CTXF_MARGINALS | CTXF_VITERBI, L, T);
     if (crf1de->ctx == NULL) {
@@ -436,6 +437,11 @@ crf1de_set_data(
         goto error_exit;
     }
 
+    logging(lg, "Number of labels (recorded in ctx): %d\n", crf1de->ctx->num_labels);
+    logging(lg, "length (recorded in ctx) : %d\n", crf1de->ctx->cap_items);
+
+    /* logging(lg, "Number of labels (crf1de): %d\n", crf1de->num_labels); */
+    /* logging(lg, "Number of attributes (crf1de): %d\n", crf1de->num_attributes); */
     /* Feature generation. */
     logging(lg, "Feature generation\n");
     logging(lg, "type: CRF1d\n");
@@ -450,7 +456,8 @@ crf1de_set_data(
         A,
         opt->feature_possible_states ? 1 : 0,
         opt->feature_possible_transitions ? 1 : 0,
-        opt->feature_minfreq,
+        0,
+        /* opt->feature_minfreq, */
         lg->func,
         lg->instance
         );
@@ -462,6 +469,7 @@ crf1de_set_data(
     logging(lg, "Seconds required: %.3f\n", (clock() - begin) / (double)CLOCKS_PER_SEC);
     logging(lg, "\n");
 
+    /* exit(1); */
     /* Initialize the feature references. */
     crf1df_init_references(
         &crf1de->attributes,
@@ -475,6 +483,7 @@ crf1de_set_data(
         goto error_exit;
     }
 
+    logging(lg, "Finished jobs in crf1d set data");
     return ret;
 
 error_exit:
@@ -773,6 +782,9 @@ static int encoder_initialize(encoder_t *self, dataset_t *ds, logging_t *lg)
 {
     int ret;
     crf1de_t *crf1de = (crf1de_t*)self->internal;
+
+    logging(lg, "Number of labels: %d\n", crf1de->num_labels);
+    logging(lg, "Number of attributes: %d\n", crf1de->num_attributes);
 
     ret = crf1de_set_data(
         crf1de,

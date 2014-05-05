@@ -144,6 +144,8 @@ static int crfsuite_train_train(
         logging(lg, "\n");
     }
 
+    logging(lg, "Number of instance: %d\n", trainset.num_instances);
+
     /* Set the training set to the CRF, and generate features. */
     gm->exchange_options(gm, tr->params, -1);
     gm->initialize(gm, &trainset, lg);

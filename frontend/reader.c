@@ -84,11 +84,13 @@ static int parse_fuzzy_labels(const char * token,
         ++ e;
     }
 
+    free(token_copy);
     return 0;
 }
 
 int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
 {
+    int i = 0;
     int n = 0;
     int lid = -1;
     int * lids = NULL;
@@ -113,8 +115,6 @@ int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
     filesize = ftell(fpi) - begin;
     fseek(fpi, begin, SEEK_SET);
 
-    fprintf(stderr, "hi, i am in read data!\n");
-
     /* */
     fprintf(fpo, "0");
     fflush(fpo);
@@ -138,7 +138,7 @@ int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
         case IWA_EOI:
             /* Append the item to the instance. */
             if (0 <= lid) {
-                crfsuite_instance_append(&inst, &item, lid);
+                crfsuite_instance_append(&inst, &item, &fuzzy, lid);
             }
             crfsuite_item_finish(&item);
             break;
@@ -159,7 +159,13 @@ int read_data(FILE *fpi, FILE *fpo, crfsuite_data_t* data, int group)
                     /* Label. */
                     crfsuite_fuzzy_labels_init(&fuzzy);
                     parse_fuzzy_labels(token->attr, &fuzzy, labels);
-                    lid = labels->get(labels, token->attr);
+                    if (1 == fuzzy.num_labels) {
+                        lid = fuzzy.labels[0];
+                    } else if (1 < fuzzy.num_labels) {
+                        lid = 0; /* Just a Pseudo label */
+                    } else {
+                        fprintf(stderr, "?\n");
+                    }
                 }
             } else {
                 crfsuite_attribute_init(&cont);

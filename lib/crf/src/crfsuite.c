@@ -97,7 +97,9 @@ void crfsuite_fuzzy_labels_init(crfsuite_fuzzy_labels_t * fuzzy)
 
 void crfsuite_fuzzy_labels_finish(crfsuite_fuzzy_labels_t* fuzzy)
 {
-    free(fuzzy->labels);
+    if (fuzzy->labels) {
+        free(fuzzy->labels);
+    }
     crfsuite_fuzzy_labels_init(fuzzy);
 }
 
@@ -219,6 +221,9 @@ void crfsuite_instance_finish(crfsuite_instance_t* inst)
     for (i = 0;i < inst->num_items;++i) {
         crfsuite_item_finish(&inst->items[i]);
     }
+    for (i = 0; i < inst->num_items; ++ i) {
+        crfsuite_fuzzy_labels_finish(&inst->fuzzy[i]);
+    }
     free(inst->labels);
     free(inst->items);
     crfsuite_instance_init(inst);
@@ -257,15 +262,26 @@ void crfsuite_instance_swap(crfsuite_instance_t* x, crfsuite_instance_t* y)
     y->group = tmp.group;
 }
 
-int crfsuite_instance_append(crfsuite_instance_t* inst, const crfsuite_item_t* item, int label)
+int crfsuite_instance_append(crfsuite_instance_t* inst,
+        const crfsuite_item_t* item,
+        const crfsuite_fuzzy_labels_t* labels,
+        int lid)
 {
     if (inst->cap_items <= inst->num_items) {
         inst->cap_items = (inst->cap_items + 1) * 2;
-        inst->items = (crfsuite_item_t*)realloc(inst->items, sizeof(crfsuite_item_t) * inst->cap_items);
+        inst->items = (crfsuite_item_t*)realloc(inst->items,
+                sizeof(crfsuite_item_t) * inst->cap_items);
         inst->labels = (int*)realloc(inst->labels, sizeof(int) * inst->cap_items);
+        inst->fuzzy = (crfsuite_fuzzy_labels_t*)realloc(inst->items,
+                sizeof(crfsuite_fuzzy_labels_t) * inst->cap_items);
     }
     crfsuite_item_copy(&inst->items[inst->num_items], item);
-    inst->labels[inst->num_items] = label;
+    if (labels) {
+        crfsuite_fuzzy_labels_copy(&inst->fuzzy[inst->num_items], labels);
+    } else {
+        crfsuite_fuzzy_labels_init(&inst->fuzzy[inst->num_items]);
+    }
+    inst->labels[inst->num_items] = lid;
     ++inst->num_items;
     return 0;
 }
