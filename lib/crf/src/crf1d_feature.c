@@ -270,8 +270,6 @@ int crf1df_init_references(
     feature_refs_t *attributes = NULL;
     feature_refs_t *trans = NULL;
 
-    fprintf(stderr, "I am in crf1df_init_references\n");
-
     /*
         The purpose of this routine is to collect references (indices) of:
         - state features fired by each attribute (attributes)
@@ -283,8 +281,6 @@ int crf1df_init_references(
     if (attributes == NULL) goto error_exit;
     trans = (feature_refs_t*)calloc(L, sizeof(feature_refs_t));
     if (trans == NULL) goto error_exit;
-
-    fprintf(stderr, "hoc 2: \n K: %d\n A: %d\n L: %d\n", K, A, L);
 
     /*
         Firstly, loop over the features to count the number of references.

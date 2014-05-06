@@ -420,7 +420,6 @@ int main_learn(int argc, char *argv[], const char *argv0)
         if (ret = trainer->train(trainer, &data, opt.model, opt.holdout)) {
             goto force_exit;
         }
-
     }
 
     /* Log the end time. */
@@ -434,7 +433,7 @@ force_exit:
     SAFE_RELEASE(data.labels);
     SAFE_RELEASE(data.attrs);
 
-    crfsuite_data_finish(&data);
+    /*crfsuite_data_finish(&data); */
     learn_option_finish(&opt);
     if (fpo != NULL) {
         fclose(fpo);

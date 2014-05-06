@@ -95,6 +95,12 @@ typedef struct {
     floatval_t log_norm;
 
     /**
+     * Logarithm of the normalization factor for the instance
+     *
+     */
+    floatval_t partial_log_norm;
+
+    /**
      * State scores.
      *  This is a [T][L] matrix whose element [t][l] presents total score
      *  of state features associating label #l at #t.
@@ -111,16 +117,32 @@ typedef struct {
     /**
      * Alpha score matrix.
      *  This is a [T][L] matrix whose element [t][l] presents the total
-     *  score of paths starting at BOS and arraiving at (t, l).
+     *  score of paths starting at BOS and arriving at (t, l).
      */
     floatval_t *alpha_score;
 
     /**
      * Beta score matrix.
      *  This is a [T][L] matrix whose element [t][l] presents the total
-     *  score of paths starting at (t, l) and arraiving at EOS.
+     *  score of paths starting at (t, l) and arriving at EOS.
      */
     floatval_t *beta_score;
+
+    /**
+     * Partial alpha score matrix.
+     *  This is a [T][L] matrix whose element [t][l] presents the total
+     *  score of paths under the constrains which starts at BOS a and
+     *  arrive at (t, l)
+     */
+    floatval_t *partial_alpha_score;
+
+    /**
+     * Partial beta score matrix.
+     *  This is a [T][L] matrix whose element [t][l] presents the total
+     *  score of paths under the constrains starting at (t, l) and arriving
+     *  at EOS.
+     */
+    floatval_t *partial_beta_score;
 
     /**
      * Scale factor vector.
@@ -128,6 +150,12 @@ typedef struct {
      *  coefficient for the alpha_score and beta_score.
      */
     floatval_t *scale_factor;
+
+    /**
+     * Partial scale factor vector.
+     *
+     */
+    floatval_t *partial_scale_factor;
 
     /**
      * Row vector (work space).
@@ -175,6 +203,22 @@ typedef struct {
      */
     floatval_t *mexp_trans;
 
+    /**
+     * Partial model expectation of states.
+     *  This is a [T][L] matrix whose element [t][l] presents the model
+     *  expectation (marginal probability) of the state (t,l)
+     *  This member is available only with CTXF_PARTIAL_MARGINALS flag.
+     */
+    floatval_t *partial_mexp_state;
+
+    /**
+     * Partial model expectation of transitions.
+     *  This is a [L][L] matrix whose element [i][j] presents the model
+     *  expectation of the transition (i--j).
+     *  This member is available only with CTXF_PARTIAL_MARGINALS flag.
+     */
+    floatval_t *partial_mexp_trans;
+
 } crf1d_context_t;
 
 #define    MATRIX(p, xl, x, y)        ((p)[(xl) * (y) + (x)])
@@ -183,6 +227,10 @@ typedef struct {
     (&MATRIX(ctx->alpha_score, ctx->num_labels, 0, t))
 #define    BETA_SCORE(ctx, t) \
     (&MATRIX(ctx->beta_score, ctx->num_labels, 0, t))
+#define    PARTIAL_ALPHA_SCORE(ctx, t) \
+    (&MATRIX(ctx->partial_alpha_score, ctx->num_labels, 0, t))
+#define    PARTIAL_BETA_SCORE(ctx, t) \
+    (&MATRIX(ctx->partial_beta_score, ctx->num_labels, 0, t))
 #define    STATE_SCORE(ctx, i) \
     (&MATRIX(ctx->state, ctx->num_labels, 0, i))
 #define    TRANS_SCORE(ctx, i) \
@@ -195,6 +243,10 @@ typedef struct {
     (&MATRIX(ctx->mexp_state, ctx->num_labels, 0, i))
 #define    TRANS_MEXP(ctx, i) \
     (&MATRIX(ctx->mexp_trans, ctx->num_labels, 0, i))
+#define    PARTIAL_STATE_MEXP(ctx, i) \
+    (&MATRIX(ctx->partial_mexp_state, ctx->num_labels, 0, i))
+#define    PARTIAL_TRANS_MEXP(ctx, i) \
+    (&MATRIX(ctx->partial_mexp_trans, ctx->num_labels, 0, i))
 #define    BACKWARD_EDGE_AT(ctx, t) \
     (&MATRIX(ctx->backward_edge, ctx->num_labels, 0, t))
 
@@ -206,11 +258,15 @@ void crf1dc_exp_state(crf1d_context_t* ctx);
 void crf1dc_exp_transition(crf1d_context_t* ctx);
 void crf1dc_alpha_score(crf1d_context_t* ctx);
 void crf1dc_beta_score(crf1d_context_t* ctx);
+void crf1dc_partial_alpha_score(crf1d_context_t* ctx, int *mask);
+void crf1dc_partial_beta_score(crf1d_context_t* ctx, int *mask);
 void crf1dc_marginals(crf1d_context_t* ctx);
+void crf1dc_partial_marginals(crf1d_context_t* ctx, int *mask);
 floatval_t crf1dc_marginal_point(crf1d_context_t *ctx, int l, int t);
 floatval_t crf1dc_marginal_path(crf1d_context_t *ctx, const int *path, int begin, int end);
 floatval_t crf1dc_score(crf1d_context_t* ctx, const int *labels);
 floatval_t crf1dc_lognorm(crf1d_context_t* ctx);
+floatval_t crf1dc_partial_lognorm(crf1d_context_t* ctx);
 floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels);
 void crf1dc_debug_context(FILE *fp);
 

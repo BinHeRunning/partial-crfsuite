@@ -63,9 +63,19 @@ crf1d_context_t* crf1dc_new(int flag, int L, int T)
 
         if (ctx->flag & CTXF_MARGINALS) {
             ctx->exp_trans = (floatval_t*)_aligned_malloc((L * L + 4) * sizeof(floatval_t), 16);
-            if (ctx->exp_trans == NULL) goto error_exit;
+            if (ctx->exp_trans == NULL) {
+              goto error_exit;
+            }
+
             ctx->mexp_trans = (floatval_t*)calloc(L * L, sizeof(floatval_t));
-            if (ctx->mexp_trans == NULL) goto error_exit;
+            if (ctx->mexp_trans == NULL) {
+              goto error_exit;
+            }
+
+            ctx->partial_mexp_trans = (floatval_t*)calloc(L * L, sizeof(floatval_t));
+            if (ctx->partial_mexp_trans == NULL) {
+              goto error_exit;
+            }
         }
 
         if (ret = crf1dc_set_num_items(ctx, T)) {
@@ -92,20 +102,50 @@ int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
     if (ctx->cap_items < T) {
         free(ctx->backward_edge);
         free(ctx->mexp_state);
+        free(ctx->partial_mexp_state);
         _aligned_free(ctx->exp_state);
         free(ctx->scale_factor);
+        free(ctx->partial_scale_factor);
         free(ctx->row);
         free(ctx->beta_score);
         free(ctx->alpha_score);
+        free(ctx->partial_alpha_score);
+        free(ctx->partial_beta_score);
 
         ctx->alpha_score = (floatval_t*)calloc(T * L, sizeof(floatval_t));
-        if (ctx->alpha_score == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        if (ctx->alpha_score == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
         ctx->beta_score = (floatval_t*)calloc(T * L, sizeof(floatval_t));
-        if (ctx->beta_score == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        if (ctx->beta_score == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
+        ctx->partial_alpha_score = (floatval_t*)calloc(T * L, sizeof(floatval_t));
+        if (ctx->partial_alpha_score == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
+        ctx->partial_beta_score = (floatval_t*)calloc(T * L, sizeof(floatval_t));
+        if (ctx->partial_beta_score == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
         ctx->scale_factor = (floatval_t*)calloc(T, sizeof(floatval_t));
-        if (ctx->scale_factor == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        if (ctx->scale_factor == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
+        ctx->partial_scale_factor = (floatval_t*)calloc(T, sizeof(floatval_t));
+        if (ctx->partial_scale_factor == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
+
         ctx->row = (floatval_t*)calloc(L, sizeof(floatval_t));
-        if (ctx->row == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        if (ctx->row == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
 
         if (ctx->flag & CTXF_VITERBI) {
             ctx->backward_edge = (int*)calloc(T * L, sizeof(int));
@@ -113,13 +153,25 @@ int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
         }
 
         ctx->state = (floatval_t*)calloc(T * L, sizeof(floatval_t));
-        if (ctx->state == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        if (ctx->state == NULL) {
+          return CRFSUITEERR_OUTOFMEMORY;
+        }
 
         if (ctx->flag & CTXF_MARGINALS) {
             ctx->exp_state = (floatval_t*)_aligned_malloc((T * L + 4) * sizeof(floatval_t), 16);
-            if (ctx->exp_state == NULL) return CRFSUITEERR_OUTOFMEMORY;
+            if (ctx->exp_state == NULL) {
+              return CRFSUITEERR_OUTOFMEMORY;
+            }
+
             ctx->mexp_state = (floatval_t*)calloc(T * L, sizeof(floatval_t));
-            if (ctx->mexp_state == NULL) return CRFSUITEERR_OUTOFMEMORY;
+            if (ctx->mexp_state == NULL) {
+              return CRFSUITEERR_OUTOFMEMORY;
+            }
+
+            ctx->partial_mexp_state = (floatval_t*)calloc(T* L, sizeof(floatval_t));
+            if (ctx->partial_mexp_state == NULL) {
+              return CRFSUITEERR_OUTOFMEMORY;
+            }
         }
 
         ctx->cap_items = T;
@@ -133,13 +185,17 @@ void crf1dc_delete(crf1d_context_t* ctx)
     if (ctx != NULL) {
         free(ctx->backward_edge);
         free(ctx->mexp_state);
+        free(ctx->partial_mexp_state);
         _aligned_free(ctx->exp_state);
         free(ctx->state);
         free(ctx->scale_factor);
         free(ctx->row);
         free(ctx->beta_score);
         free(ctx->alpha_score);
+        free(ctx->partial_alpha_score);
+        free(ctx->partial_beta_score);
         free(ctx->mexp_trans);
+        free(ctx->partial_mexp_trans);
         _aligned_free(ctx->exp_trans);
         free(ctx->trans);
     }
@@ -161,7 +217,10 @@ void crf1dc_reset(crf1d_context_t* ctx, int flag)
     if (ctx->flag & CTXF_MARGINALS) {
         veczero(ctx->mexp_state, T*L);
         veczero(ctx->mexp_trans, L*L);
+        veczero(ctx->partial_mexp_state, T*L);
+        veczero(ctx->partial_mexp_trans, L*L);
         ctx->log_norm = 0;
+        ctx->partial_log_norm = 0;
     }
 }
 
@@ -229,6 +288,77 @@ void crf1dc_alpha_score(crf1d_context_t* ctx)
     ctx->log_norm = -vecsumlog(ctx->scale_factor, T);
 }
 
+void crf1dc_partial_alpha_score(crf1d_context_t* ctx, int *mask)
+{
+    int i, j, t;
+    int *prev_mask, *curr_mask;
+    floatval_t sum, *cur = NULL;
+    floatval_t *scale = &ctx->partial_scale_factor[0];
+    const floatval_t *prev = NULL, *trans = NULL, *state = NULL;
+    const int T = ctx->num_items;
+    const int L = ctx->num_labels;
+
+    /* Compute the alpha scores on nodes (0, *).
+        alpha[0][j] = state[0][j]
+     */
+    cur = PARTIAL_ALPHA_SCORE(ctx, 0);
+    veczero(cur, L);
+    state = EXP_STATE_SCORE(ctx, 0);
+    curr_mask = &mask[0];
+    for (i = 0; i < L; ++ i) {
+      if (curr_mask[i]) {
+        cur[i] = state[i];
+      }
+    }
+
+    sum = vecsum(cur, L);
+    /* scale is a temporary structure */
+    *scale = (sum != 0.) ? 1. / sum : 1.;
+    vecscale(cur, *scale, L);
+    ++scale;
+
+    /* Compute the alpha scores on nodes (t, *).
+        alpha[t][j] = state[t][j] * \sum_{i} alpha[t-1][i] * trans[i][j]
+     */
+    for (t = 1;t < T;++t) {
+        prev = PARTIAL_ALPHA_SCORE(ctx, t-1);
+        cur = PARTIAL_ALPHA_SCORE(ctx, t);
+        state = EXP_STATE_SCORE(ctx, t);
+        prev_mask = &mask[(t-1) * L];
+        curr_mask = &mask[t * L];
+
+        veczero(cur, L);
+        for (i = 0; i < L; ++ i) {
+          if (prev_mask[i]) {
+            trans = EXP_TRANS_SCORE(ctx, i);
+            for (j = 0; j < L; ++ j) {
+              if (curr_mask[j]) {
+                cur[j] += prev[i] * trans[j];
+              }
+            }
+          }
+        }
+
+        for (j = 0; j < L; ++ j) {
+          if (curr_mask[j]) {
+            cur[j] *= state[j];
+          }
+        }
+
+        sum = vecsum(cur, L);
+        *scale = (sum != 0.) ? 1. / sum : 1.;
+        vecscale(cur, *scale, L);
+        ++scale;
+    }
+
+    /* Compute the logarithm of the normalization factor here.
+        norm = 1. / (C[0] * C[1] ... * C[T-1])
+        log(norm) = - \sum_{t = 0}^{T-1} log(C[t]).
+     */
+    ctx->partial_log_norm = -vecsumlog(ctx->partial_scale_factor, T);
+
+}
+
 void crf1dc_beta_score(crf1d_context_t* ctx)
 {
     int i, t;
@@ -258,6 +388,60 @@ void crf1dc_beta_score(crf1d_context_t* ctx)
             trans = EXP_TRANS_SCORE(ctx, i);
             cur[i] = vecdot(trans, row, L);
         }
+        vecscale(cur, *scale, L);
+        --scale;
+    }
+}
+
+void crf1dc_partial_beta_score(crf1d_context_t* ctx, int *mask) 
+{
+    int i, j, t;
+    int *curr_mask, *next_mask;
+    floatval_t *cur = NULL;
+    floatval_t *row = ctx->row;
+    const floatval_t *next = NULL, *state = NULL, *trans = NULL;
+    const int T = ctx->num_items;
+    const int L = ctx->num_labels;
+    const floatval_t *scale = &ctx->partial_scale_factor[T-1];
+
+    /* Compute the beta scores at (T-1, *). */
+    cur = PARTIAL_BETA_SCORE(ctx, T-1);
+    veczero(cur, L);
+    curr_mask = &mask[(T-1)*L];
+    for (i = 0; i < L; ++ i) {
+      if (curr_mask[i]) {
+        cur[i] = *scale;
+      }
+    }
+    --scale;
+
+    /* Compute the beta scores at (t, *). */
+    for (t = T-2;0 <= t;--t) {
+        cur = PARTIAL_BETA_SCORE(ctx, t);
+        next = PARTIAL_BETA_SCORE(ctx, t+1);
+        state = EXP_STATE_SCORE(ctx, t+1);
+        curr_mask = &mask[t * L];
+        next_mask = &mask[(t+1) * L];
+
+        veccopy(row, next, L);
+        veczero(cur, L);
+        for (i = 0; i < L; ++ i) {
+          if (next_mask[i]) {
+            row[i] *= state[i];
+          } 
+        }
+
+        for (j = 0; j < L; ++ j) {
+          if (curr_mask[j]) {
+            trans = EXP_TRANS_SCORE(ctx, j);
+            for (i = 0; i < L; ++ i) {
+              if (next_mask[i]) {
+                cur[j] += trans[i] * row[i];
+              }
+            }
+          }
+        }
+
         vecscale(cur, *scale, L);
         --scale;
     }
@@ -310,6 +494,66 @@ void crf1dc_marginals(crf1d_context_t* ctx)
             }
         }
     }
+}
+
+void crf1dc_partial_marginals(crf1d_context_t *ctx, int *mask)
+{
+    int i, j, t;
+    int *prev_mask, *curr_mask;
+    const int T = ctx->num_items;
+    const int L = ctx->num_labels;
+
+    /*
+        Compute the model expectations of states.
+            p(t,i) = fwd[t][i] * bwd[t][i] / norm
+                   = (1. / C[t]) * fwd'[t][i] * bwd'[t][i]
+     */
+    for (t = 0;t < T;++t) {
+        curr_mask = &mask[t* L];
+        floatval_t *fwd = PARTIAL_ALPHA_SCORE(ctx, t);
+        floatval_t *bwd = PARTIAL_BETA_SCORE(ctx, t);
+        floatval_t *prob = PARTIAL_STATE_MEXP(ctx, t);
+        veccopy(prob, fwd, L);
+        vecmul(prob, bwd, L);
+        vecscale(prob, 1. / ctx->partial_scale_factor[t], L);
+    }
+
+    /*
+        Compute the model expectations of transitions.
+            p(t,i,t+1,j)
+                = fwd[t][i] * edge[i][j] * state[t+1][j] * bwd[t+1][j] / norm
+                = (fwd'[t][i] / (C[0] ... C[t])) * edge[i][j] * state[t+1][j] * (bwd'[t+1][j] / (C[t+1] ... C[T-1])) * (C[0] * ... * C[T-1])
+                = fwd'[t][i] * edge[i][j] * state[t+1][j] * bwd'[t+1][j]
+        The model expectation of a transition (i -> j) is the sum of the marginal
+        probabilities p(t,i,t+1,j) over t.
+     */
+    for (t = 0;t < T-1;++t) {
+        floatval_t *fwd = PARTIAL_ALPHA_SCORE(ctx, t);
+        floatval_t *state = EXP_STATE_SCORE(ctx, t+1);
+        floatval_t *bwd = PARTIAL_BETA_SCORE(ctx, t+1);
+        floatval_t *row = ctx->row;
+
+        /* row[j] = state[t+1][j] * bwd'[t+1][j] */
+        veccopy(row, bwd, L);
+        vecmul(row, state, L);
+
+        prev_mask = &mask[t*L];
+        curr_mask = &mask[(t+1)*L];
+
+        for (i = 0;i < L;++i) {
+          if (prev_mask[i]) {
+            floatval_t *edge = EXP_TRANS_SCORE(ctx, i);
+            floatval_t *prob = PARTIAL_TRANS_MEXP(ctx, i);
+            for (j = 0;j < L;++j) {
+              if (curr_mask[j]) {
+                prob[j] += fwd[i] * edge[j] * row[j];
+                // fprintf(stderr, "%lf\n", fwd[i] * edge[j] * row[j]);
+              }
+            }
+          }
+        }
+    }
+
 }
 
 floatval_t crf1dc_marginal_point(crf1d_context_t *ctx, int l, int t)
@@ -460,6 +704,11 @@ floatval_t crf1dc_score(crf1d_context_t* ctx, const int *labels)
 floatval_t crf1dc_lognorm(crf1d_context_t* ctx)
 {
     return ctx->log_norm;
+}
+
+floatval_t crf1dc_partial_lognorm(crf1d_context_t *ctx)
+{
+  return ctx->partial_log_norm;
 }
 
 floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)

@@ -46,6 +46,7 @@
 #include "crf1d.h"
 #include "params.h"
 #include "logging.h"
+#include "vecmath.h"
 
 /**
  * Parameters for feature generation.
@@ -399,6 +400,57 @@ crf1de_model_expectation(
     }
 }
 
+static void
+crf1de_partial_model_expectation(
+    crf1de_t *crf1de,
+    const crfsuite_instance_t *inst,
+    floatval_t *w,
+    const floatval_t scale
+    )
+{
+    int a, c, i, t, r;
+    crf1d_context_t* ctx = crf1de->ctx;
+    const feature_refs_t *attr = NULL, *trans = NULL;
+    const crfsuite_item_t* item = NULL;
+    const int T = inst->num_items;
+    const int L = crf1de->num_labels;
+
+    for (t = 0;t < T;++t) {
+        floatval_t *prob = PARTIAL_STATE_MEXP(ctx, t);
+
+        /* Compute expectations for state features at position #t. */
+        item = &inst->items[t];
+        for (c = 0;c < item->num_contents;++c) {
+            /* Access the attribute. */
+            floatval_t value = item->contents[c].value;
+            a = item->contents[c].aid;
+            attr = ATTRIBUTE(crf1de, a);
+
+            /* Loop over state features for the attribute. */
+            for (r = 0;r < attr->num_features;++r) {
+                int fid = attr->fids[r];
+                crf1df_feature_t *f = FEATURE(crf1de, fid);
+                // fprintf(stderr, "%lf\n", prob[f->dst]);
+                w[fid] += prob[f->dst] * value * scale;
+            }
+        }
+    }
+
+    /* Loop over the labels (t, i) */
+    for (i = 0;i < L;++i) {
+        const floatval_t *prob = PARTIAL_TRANS_MEXP(ctx, i);
+        const feature_refs_t *edge = TRANSITION(crf1de, i);
+        for (r = 0;r < edge->num_features;++r) {
+            /* Transition feature from #i to #(f->dst). */
+            int fid = edge->fids[r];
+            crf1df_feature_t *f = FEATURE(crf1de, fid);
+            // fprintf(stderr, "%f", prob[f->dst]);
+            w[fid] += prob[f->dst] * scale;
+        }
+    }
+}
+
+
 static int
 crf1de_set_data(
     crf1de_t *crf1de,
@@ -408,7 +460,7 @@ crf1de_set_data(
     logging_t *lg
     )
 {
-    int i, ret = 0;
+    int i, j, k, ret = 0;
     clock_t begin = 0;
     int T = 0;
     const int L = num_labels;
@@ -429,7 +481,20 @@ crf1de_set_data(
         }
     }
 
-    logging(lg, "T : %d\n", T);
+    /* Initialize mask */
+    for (i = 0; i < N; ++ i) {
+      crfsuite_instance_t * inst = dataset_get(ds, i);
+      inst->mask = (int *)calloc(L * inst->num_items, sizeof(int));
+      for (j = 0; j < inst->num_items * L; ++ j) {
+        inst->mask[j] = 0;
+      }
+      for (j = 0; j < inst->num_items; ++ j) {
+        for (k = 0; k < inst->fuzzy[j].num_labels; ++ k) {
+          inst->mask[j * L + inst->fuzzy[j].labels[k]] = 1;
+        }
+      }
+    }
+
     /* Construct a CRF context. */
     crf1de->ctx = crf1dc_new(CTXF_MARGINALS | CTXF_VITERBI, L, T);
     if (crf1de->ctx == NULL) {
@@ -437,11 +502,6 @@ crf1de_set_data(
         goto error_exit;
     }
 
-    logging(lg, "Number of labels (recorded in ctx): %d\n", crf1de->ctx->num_labels);
-    logging(lg, "length (recorded in ctx) : %d\n", crf1de->ctx->cap_items);
-
-    /* logging(lg, "Number of labels (crf1de): %d\n", crf1de->num_labels); */
-    /* logging(lg, "Number of attributes (crf1de): %d\n", crf1de->num_attributes); */
     /* Feature generation. */
     logging(lg, "Feature generation\n");
     logging(lg, "type: CRF1d\n");
@@ -449,6 +509,7 @@ crf1de_set_data(
     logging(lg, "feature.possible_states: %d\n", opt->feature_possible_states);
     logging(lg, "feature.possible_transitions: %d\n", opt->feature_possible_transitions);
     begin = clock();
+    logging(lg, "Number of features: %d\n", crf1de->num_features);
     crf1de->features = crf1df_generate(
         &crf1de->num_features,
         ds,
@@ -456,8 +517,7 @@ crf1de_set_data(
         A,
         opt->feature_possible_states ? 1 : 0,
         opt->feature_possible_transitions ? 1 : 0,
-        0,
-        /* opt->feature_minfreq, */
+        opt->feature_minfreq,
         lg->func,
         lg->instance
         );
@@ -469,7 +529,6 @@ crf1de_set_data(
     logging(lg, "Seconds required: %.3f\n", (clock() - begin) / (double)CLOCKS_PER_SEC);
     logging(lg, "\n");
 
-    /* exit(1); */
     /* Initialize the feature references. */
     crf1df_init_references(
         &crf1de->attributes,
@@ -483,7 +542,6 @@ crf1de_set_data(
         goto error_exit;
     }
 
-    logging(lg, "Finished jobs in crf1d set data");
     return ret;
 
 error_exit:
@@ -783,9 +841,6 @@ static int encoder_initialize(encoder_t *self, dataset_t *ds, logging_t *lg)
     int ret;
     crf1de_t *crf1de = (crf1de_t*)self->internal;
 
-    logging(lg, "Number of labels: %d\n", crf1de->num_labels);
-    logging(lg, "Number of attributes: %d\n", crf1de->num_attributes);
-
     ret = crf1de_set_data(
         crf1de,
         ds,
@@ -799,7 +854,10 @@ static int encoder_initialize(encoder_t *self, dataset_t *ds, logging_t *lg)
 }
 
 /* LEVEL_NONE -> LEVEL_NONE. */
-static int encoder_objective_and_gradients_batch(encoder_t *self, dataset_t *ds, const floatval_t *w, floatval_t *f, floatval_t *g)
+static int encoder_objective_and_gradients_batch(encoder_t *self, dataset_t *ds,
+    const floatval_t *w,
+    floatval_t *f,
+    floatval_t *g)
 {
     int i;
     floatval_t logp = 0, logl = 0;
@@ -810,11 +868,12 @@ static int encoder_objective_and_gradients_batch(encoder_t *self, dataset_t *ds,
     /*
         Initialize the gradients with observation expectations.
      */
-    for (i = 0;i < K;++i) {
+    /* First block this */
+    /* for (i = 0;i < K;++i) {
         crf1df_feature_t* f = &crf1de->features[i];
         g[i] = -f->freq;
-    }
-
+    } */
+    veczero(g, K);
     /*
         Set the scores (weights) of transition features here because
         these are independent of input label sequences.
@@ -835,26 +894,42 @@ static int encoder_objective_and_gradients_batch(encoder_t *self, dataset_t *ds,
         crf1de_state_score(crf1de, seq, w);
         crf1dc_exp_state(crf1de->ctx);
 
+        /* Compute partial forward/backward scores. */
+        crf1dc_partial_alpha_score(crf1de->ctx, seq->mask);
+        crf1dc_partial_beta_score(crf1de->ctx, seq->mask);
+        crf1dc_partial_marginals(crf1de->ctx, seq->mask);
+
         /* Compute forward/backward scores. */
         crf1dc_alpha_score(crf1de->ctx);
         crf1dc_beta_score(crf1de->ctx);
         crf1dc_marginals(crf1de->ctx);
 
         /* Compute the probability of the input sequence on the model. */
-        logp = crf1dc_score(crf1de->ctx, seq->labels) - crf1dc_lognorm(crf1de->ctx);
+        /* logp = crf1dc_score(crf1de->ctx, seq->labels) - crf1dc_lognorm(crf1de->ctx); */
+        logp = crf1dc_partial_lognorm(crf1de->ctx) - crf1dc_lognorm(crf1de->ctx);
+        // fprintf(stdout, "[%d] %lf\n", i, logp);
         /* Update the log-likelihood. */
         logl += logp * seq->weight;
 
         /* Update the model expectations of features. */
+        crf1de_partial_model_expectation(crf1de, seq, g, -(seq->weight));
         crf1de_model_expectation(crf1de, seq, g, seq->weight);
     }
 
+    /*for (i = 0; i < K; ++ i) {
+      fprintf(stdout, "-%d- %lf\n", i, g[i]);
+    }*/
     *f = -logl;
+    // fprintf(stderr, "f = %lf\n", *f);
     return 0;
 }
 
 /* LEVEL_NONE -> LEVEL_NONE. */
-static int encoder_features_on_path(encoder_t *self, const crfsuite_instance_t *inst, const int *path, crfsuite_encoder_features_on_path_callback func, void *instance)
+static int encoder_features_on_path(encoder_t *self,
+    const crfsuite_instance_t *inst,
+    const int *path,
+    crfsuite_encoder_features_on_path_callback func,
+    void *instance)
 {
     crf1de_t *crf1de = (crf1de_t*)self->internal;
     crf1de_features_on_path(crf1de, inst, path, func, instance);

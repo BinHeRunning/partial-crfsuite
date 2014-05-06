@@ -178,6 +178,7 @@ typedef struct {
     int         *labels;
     /** Array of the fuzzy labels */
     crfsuite_fuzzy_labels_t *fuzzy;
+    int         *mask;
     /** Instance weight. */
     floatval_t  weight;
     /** Group ID of the instance. */

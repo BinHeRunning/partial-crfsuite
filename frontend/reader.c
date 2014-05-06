@@ -66,7 +66,7 @@ static int parse_fuzzy_labels(const char * token,
     char * e = NULL;
     int lid = -1;
 
-	strcpy(token_copy, token);
+    strcpy(token_copy, token);
     s = token_copy;
     e = token_copy;
 
