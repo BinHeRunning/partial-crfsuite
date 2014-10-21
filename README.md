@@ -41,3 +41,29 @@ b|m|e|s	u[-1]=治	u[0]=碧	u[1]=瑶
 b|m|e|s	u[-1]=碧	u[0]=瑶	u[1]=，
 b|m|e|s	u[-1]=瑶	u[0]=，	u[1]=_eos_
 ```
+
+### Training
+
+We have prepared an example training data in `./partial-data/train.crfsuite`.
+You can use it to train a model.
+
+```
+./frontend/crfsuite learn -m train.model -a lbfgs partial-data/train.crfsuite
+```
+
+Until now, only the `lbfgs` is supported by `partial-crfsuite`.
+Other learning alogrithm was not tested in partial-crfsuite.
+We also welcome any test and patch :-)
+
+### Test
+
+You can use the following commands to test the rained model in previous section.
+An evaluation script is also provides to test the segmentation performance.
+
+```
+./frontend/crfsuite tag -m train.model partial-data/test.crfsuite | ./partial-data/eval.py -r ./partial-data/test.reference
+```
+
+## LICENSE
+
+For license issue, please consult the LICENSE section in the original README file.
