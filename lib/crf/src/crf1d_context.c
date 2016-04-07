@@ -52,7 +52,7 @@ crf1d_context_t* crf1dc_new(int flag, int L, int T)
 {
     int ret = 0;
     crf1d_context_t* ctx = NULL;
-    
+
     ctx = (crf1d_context_t*)calloc(1, sizeof(crf1d_context_t));
     if (ctx != NULL) {
         ctx->flag = flag;
@@ -611,7 +611,7 @@ void crf1dc_marginal_without_beta(crf1d_context_t* ctx)
     fwd = ALPHA_SCORE(ctx, T-1);
     prob = STATE_MEXP(ctx, T-1);
     veccopy(prob, fwd, L);
-    
+
     /*
         Repeat the following computation for t = T-1,T-2, ..., 1.
             1) Compute p(t-1,i,t,j) using p(t,j)
@@ -762,6 +762,9 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     /* Find the node (#T, #i) that reaches EOS with the maximum score. */
     max_score = -FLOAT_MAX;
     prev = ALPHA_SCORE(ctx, T-1);
+    /* Set a score for T-1 to be overwritten later. Just in case we don't
+       end up with something beating -FLOAT_MAX. */
+    labels[T-1] = 0;
     for (i = 0;i < L;++i) {
         if (max_score < prev[i]) {
             max_score = prev[i];
@@ -854,7 +857,7 @@ void crf1dc_debug_context(FILE *fp)
         for (y2 = 0;y2 < L;++y2) {
             for (y3 = 0;y3 < L;++y3) {
                 floatval_t logp;
-                
+
                 labels[0] = y1;
                 labels[1] = y2;
                 labels[2] = y3;
@@ -878,7 +881,7 @@ void crf1dc_debug_context(FILE *fp)
         a = ALPHA_SCORE(ctx, 0)[y1];
         b = BETA_SCORE(ctx, 0)[y1];
         c = 1. / ctx->scale_factor[0];
-        
+
         fprintf(fp, "Check for the marginal probability (0,%d)... ", y1);
         check_values(fp, a * b * c, s / norm);
     }
@@ -895,7 +898,7 @@ void crf1dc_debug_context(FILE *fp)
         a = ALPHA_SCORE(ctx, 1)[y2];
         b = BETA_SCORE(ctx, 1)[y2];
         c = 1. / ctx->scale_factor[1];
-        
+
         fprintf(fp, "Check for the marginal probability (1,%d)... ", y2);
         check_values(fp, a * b * c, s / norm);
     }
@@ -912,7 +915,7 @@ void crf1dc_debug_context(FILE *fp)
         a = ALPHA_SCORE(ctx, 2)[y3];
         b = BETA_SCORE(ctx, 2)[y3];
         c = 1. / ctx->scale_factor[2];
-        
+
         fprintf(fp, "Check for the marginal probability (2,%d)... ", y3);
         check_values(fp, a * b * c, s / norm);
     }
